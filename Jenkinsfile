@@ -1,30 +1,29 @@
-
 pipeline {
-  agent { label 'slave-node-1' } 
-  environment {
-    TOMCAT_PATH = '/opt/tomcat9'
-    WAR_NAME = 'mywebapp.war'
-  }
+  agent { label 'slave-node-1' }   // your slave node label name 
+
   stages {
     stage('Checkout') {
       steps {
+        echo "Fetching code from Git..."
         checkout scm
       }
     }
+
     stage('Build') {
       steps {
-        sh 'mvn -B -DskipTests clean package'
+        echo "Building Maven project..."
+        sh 'mvn clean package -DskipTests'
       }
     }
+
     stage('Deploy to Tomcat') {
       steps {
+        echo "Deploying WAR to Tomcat..."
         sh '''
-          sudo mv -f target/${WAR_NAME} ${TOMCAT_PATH}/webapps/
-          sudo chown -R tomcat:tomcat ${TOMCAT_PATH}/webapps/${WAR_NAME}
-          sudo chmod 644 ${TOMCAT_PATH}/webapps/${WAR_NAME}
-          sudo /bin/bash -c "${TOMCAT_PATH}/bin/shutdown.sh || true"
-          sleep 2
-          sudo /bin/bash -c "${TOMCAT_PATH}/bin/startup.sh"
+          sudo systemctl stop tomcat9 || true
+          sudo cp target/mywebapp.war /opt/tomcat9/webapps/
+          sudo chown tomcat:tomcat /opt/tomcat9/webapps/mywebapp.war
+          sudo systemctl start tomcat9
         '''
       }
     }
