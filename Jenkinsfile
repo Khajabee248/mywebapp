@@ -1,40 +1,38 @@
 pipeline {
-    agent any
+    agent { label 'slave-node-1' }   // ✅ Runs on slave node
 
     environment {
         TOMCAT_HOME = '/opt/tomcat9'
+        WAR_FILE = 'target/mywebapp.war'
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 echo 'Fetching code from Git...'
-                git branch: 'main',
-                    credentialsId: 'b0d750c5-17f2-4a67-872c-d28f92b71329',
-                    url: 'https://github.com/Khajabee248/mywebapp.git'
+                git branch: 'main', 
+                    url: 'https://github.com/Khajabee248/mywebapp.git',
+                    credentialsId: 'b0d750c5-17f2-4a67-872c-d28f92b71329'
             }
         }
 
         stage('Build') {
             steps {
                 echo 'Building Maven project...'
-                sh 'mvn clean package -DskipTests'
+                sh '''
+                    export PATH=$PATH:/usr/share/maven/bin
+                    mvn clean package -DskipTests
+                '''
             }
         }
 
         stage('Deploy to Tomcat') {
             steps {
                 echo 'Deploying WAR file to Tomcat server...'
+                // ✅ No sudo password prompt
                 sh '''
-                    # Stop Tomcat if running (ignore errors)
-                    sudo ${TOMCAT_HOME}/bin/shutdown.sh || true
-
-                    # Copy new WAR to webapps
-                    sudo cp target/mywebapp.war ${TOMCAT_HOME}/webapps/
-
-                    # Start Tomcat again
-                    sudo ${TOMCAT_HOME}/bin/startup.sh
+                    sudo cp $WAR_FILE $TOMCAT_HOME/webapps/
+                    sudo systemctl restart tomcat9
                 '''
             }
         }
@@ -42,11 +40,12 @@ pipeline {
 
     post {
         success {
-            echo '✅ Deployment successful! App is live on Tomcat.'
+            echo '✅ Deployment successful! App deployed to Tomcat.'
         }
         failure {
             echo '❌ Deployment failed. Please check logs.'
         }
     }
 }
+
 
