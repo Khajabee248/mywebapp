@@ -1,51 +1,49 @@
 pipeline {
-    agent { label 'slave-node-1' }   // ✅ Runs on slave node
+  agent any
 
-    environment {
-        TOMCAT_HOME = '/opt/tomcat9'
-        WAR_FILE = 'target/mywebapp.war'
+  stages {
+    stage('Checkout') {
+      steps {
+        echo "Checking out..."
+        checkout scm
+      }
     }
 
-    stages {
-        stage('Checkout') {
-            steps {
-                echo 'Fetching code from Git...'
-                git branch: 'main', 
-                    url: 'https://github.com/Khajabee248/mywebapp.git',
-                    credentialsId: 'b0d750c5-17f2-4a67-872c-d28f92b71329'
-            }
-        }
-
-        stage('Build') {
-            steps {
-                echo 'Building Maven project...'
-                sh '''
-                    export PATH=$PATH:/usr/share/maven/bin
-                    mvn clean package -DskipTests
-                '''
-            }
-        }
-
-        stage('Deploy to Tomcat') {
-            steps {
-                echo 'Deploying WAR file to Tomcat server...'
-                // ✅ No sudo password prompt
-                sh '''
-                    sudo cp $WAR_FILE $TOMCAT_HOME/webapps/
-                    sudo systemctl restart tomcat9
-                '''
-            }
-        }
-    }
-
-    post {
+    stage('Build on Slave') {
+      agent { label 'slave-node-1' }
+      steps {
+        echo "Running mvn package on slave-node-1"
+        sh 'mvn -B clean package'
+      }
+      post {
         success {
-            echo '✅ Deployment successful! App deployed to Tomcat.'
+          archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+          junit 'target/surefire-reports/*.xml'
         }
-        failure {
-            echo '❌ Deployment failed. Please check logs.'
-        }
+      }
     }
+
+    // Optional deploy stage (enable if you have Tomcat on the slave and proper permissions)
+     
+    stage('Deploy to Tomcat') {
+      agent { label 'slave-node-1' }
+      steps {
+        echo "Deploying to Tomcat"
+        sh '''
+          sudo cp target/mywebapp.war /opt/tomcat9/webapps/
+          sudo systemctl restart tomcat9
+        '''
+      }
+    }
+     
+  }
+
+  post {
+    always {
+      echo "Pipeline finished. Result: ${currentBuild.currentResult}"
+    }
+    failure {
+      echo "Build failed!"
+    }
+  }
 }
-
-
